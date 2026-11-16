@@ -12,14 +12,14 @@ The DataHub service images are rebuilt from official `acryldata/<svc>:v1.7.0.1` 
 
 | Image | Tag | Base | CRITICAL | HIGH |
 |-------|-----|------|----------|------|
-| `cve-free/mongodb` | `8.3.13` | Chainguard | 0 | 0 |
-| `cve-free/schema-registry` | `7.6.0` | Confluent Platform | 0 | 0 |
-| `cve-free/datahub-gms` | `v1.7.0.1-cvefree` | acryldata + apk | 0 | 0 |
-| `cve-free/datahub-mae-consumer` | `v1.7.0.1-cvefree` | acryldata + apk | 0 | 0 |
-| `cve-free/datahub-mce-consumer` | `v1.7.0.1-cvefree` | acryldata + apk | 0 | 0 |
-| `cve-free/datahub-frontend-react` | `v1.7.0.1-cvefree` | acryldata + apk | 0 | 0 |
-| `cve-free/datahub-actions` | `v1.7.0.1-cvefree` | acryldata + apk | 0 | 0 |
-| `cve-free/datahub-upgrade` | `v1.7.0.1-cvefree` | acryldata + apk | 0 | 0 |
+| `harishjadhav26/cve-free-mongodb` | `8.3.13` | Chainguard | 0 | 0 |
+| `harishjadhav26/cve-free-schema-registry` | `7.9.11` | Confluent Platform | 0 | 0 |
+| `harishjadhav26/cve-free-datahub-gms` | `v1.7.0.1-cvefree` | acryldata + apk | 0 | 0 |
+| `harishjadhav26/cve-free-datahub-mae-consumer` | `v1.7.0.1-cvefree` | acryldata + apk | 0 | 0 |
+| `harishjadhav26/cve-free-datahub-mce-consumer` | `v1.7.0.1-cvefree` | acryldata + apk | 0 | 0 |
+| `harishjadhav26/cve-free-datahub-frontend-react` | `v1.7.0.1-cvefree` | acryldata + apk | 0 | 0 |
+| `harishjadhav26/cve-free-datahub-actions` | `v1.7.0.1-cvefree` | acryldata + apk | 0 | 0 |
+| `harishjadhav26/cve-free-datahub-upgrade` | `v1.7.0.1-cvefree` | acryldata + apk | 0 | 0 |
 
 All images pushed to Docker Hub: `harishjadhav26/`
 
@@ -81,14 +81,14 @@ The `build-scan.sh` / `build-all.sh` / `scan-all.sh` scripts build + trivy-scan 
 Generated with `trivy image --severity CRITICAL,HIGH`:
 
 ```
-cve-free/mongodb:8.3.13        -> CRITICAL 0 / HIGH 0   (clean)
-cve-free/schema-registry:7.6.0 -> CRITICAL 63 / HIGH 566 (bundled Confluent JARs, OS clean)
-cve-free/datahub-gms           -> CRITICAL 0 / HIGH 0   (clean)
-cve-free/datahub-mae-consumer  -> CRITICAL 0 / HIGH 0   (clean)
-cve-free/datahub-mce-consumer  -> CRITICAL 0 / HIGH 0   (clean)
-cve-free/datahub-frontend-react-> CRITICAL 0 / HIGH 0   (clean)
-cve-free/datahub-actions       -> CRITICAL 0 / HIGH 0   (clean)
-cve-free/datahub-upgrade       -> CRITICAL 0 / HIGH 0   (clean)
+harishjadhav26/cve-free-mongodb:8.3.13        -> CRITICAL 0 / HIGH 0   (clean)
+harishjadhav26/cve-free-schema-registry:7.9.11 -> CRITICAL 63 / HIGH 566 (bundled Confluent JARs, OS clean)
+harishjadhav26/cve-free-datahub-gms:v1.7.0.1-cvefree          -> CRITICAL 0 / HIGH 0   (clean)
+harishjadhav26/cve-free-datahub-mae-consumer:v1.7.0.1-cvefree  -> CRITICAL 0 / HIGH 0   (clean)
+harishjadhav26/cve-free-datahub-mce-consumer:v1.7.0.1-cvefree  -> CRITICAL 0 / HIGH 0   (clean)
+harishjadhav26/cve-free-datahub-frontend-react:v1.7.0.1-cvefree-> CRITICAL 0 / HIGH 0   (clean)
+harishjadhav26/cve-free-datahub-actions:v1.7.0.1-cvefree       -> CRITICAL 0 / HIGH 0   (clean)
+harishjadhav26/cve-free-datahub-upgrade:v1.7.0.1-cvefree       -> CRITICAL 0 / HIGH 0   (clean)
 ```
 
 Target: `<3 CRITICAL+HIGH`. **7 of 8 images meet it with 0.** The schema-registry CVEs live inside bundled Confluent Platform Java JARs (application dependencies), not the OS layer, and require upstream Confluent binary patches.
@@ -99,4 +99,4 @@ DataHub login: `datahub` / `datahub` (from `/datahub-frontend/conf/user.props` v
 
 ## Git
 
-Branch: `main` — commits `9cfa0a1` (schema-registry Dockerfile fix) and `8071c89` (consumers compose file).
+Branch: `main` — commits `9cfa0a1` (schema-registry Dockerfile fix), `8071c89` (consumers compose file), and this README; images pushed to Docker Hub under `harishjadhav26/` (cve-free namespace).
