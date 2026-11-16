@@ -1,0 +1,225 @@
+# Runnable DataHub quickstart using CVE-free DataHub app images
+# App images: cve-free/datahub-*:v1.7.0.1-cvefree  (0 CRITICAL/HIGH)
+# Infra: official cp-kafka (KRaft) / opensearch / mysql
+name: datahub-run
+
+services:
+  kafka-broker:
+    image: apache/kafka:4.4.0
+    hostname: broker
+    container_name: dh-kafka
+    environment:
+      KAFKA_NODE_ID: '1'
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker:39092
+      KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:39092,EXTERNAL://:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: '1'
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: '1'
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: '1'
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: '0'
+      KAFKA_NUM_PARTITIONS: '3'
+      KAFKA_MAX_MESSAGE_BYTES: '5242880'
+      KAFKA_MESSAGE_MAX_BYTES: '5242880'
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "9092:9092"
+    volumes:
+      - broker:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server broker:29092 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+
+  mysql:
+    image: mysql:8.2
+    hostname: mysql
+    container_name: dh-mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_bin
+      - --default-authentication-plugin=caching_sha2_password
+    environment:
+      MYSQL_DATABASE: datahub
+      MYSQL_PASSWORD: datahub
+      MYSQL_ROOT_HOST: '%'
+      MYSQL_ROOT_PASSWORD: datahub
+      MYSQL_USER: datahub
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysqldata:/var/lib/mysql
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h mysql -u $$MYSQL_USER --password=$$MYSQL_PASSWORD"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  search:
+    image: opensearchproject/opensearch:2.19.3
+    hostname: search
+    container_name: dh-opensearch
+    environment:
+      DISABLE_SECURITY_PLUGIN: 'true'
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m -Dlog4j2.formatMsgNoLookups=true
+      discovery.type: single-node
+    ports:
+      - "9200:9200"
+    volumes:
+      - osdata:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sS --fail 'http://search:9200/_cluster/health?wait_for_status=yellow&timeout=0s' || exit 1"]
+      interval: 5s
+      timeout: 15s
+      retries: 20
+      start_period: 60s
+
+  system-update:
+    image: cve-free/datahub-upgrade:v1.7.0.1-cvefree
+    hostname: datahub-system-update
+    container_name: dh-system-update
+    command: ["-u", "SystemUpdate"]
+    depends_on:
+      kafka-broker: {condition: service_healthy}
+      mysql: {condition: service_healthy}
+      search: {condition: service_healthy}
+    environment:
+      DATAHUB_SERVER_TYPE: quickstart
+      ENTITY_REGISTRY_CONFIG_PATH: /datahub/datahub-gms/resources/entity-registry.yml
+      DATAHUB_BASE_PATH: /
+      DATAHUB_GMS_BASE_PATH: /
+      DATAHUB_GMS_HOST: datahub-gms
+      DATAHUB_GMS_PORT: '8080'
+      DATAHUB_PRECREATE_TOPICS: 'true'
+      DATAHUB_SQL_SETUP_ENABLED: 'true'
+      DATAHUB_SYSTEM_CLIENT_SECRET: JohnSnowKnowsNothing
+      DATAHUB_TOKEN_SERVICE_SIGNING_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      DATAHUB_TOKEN_SERVICE_SALT: 0123456789abcdef0123456789abcdef
+      EBEAN_DATASOURCE_DRIVER: com.mysql.jdbc.Driver
+      EBEAN_DATASOURCE_HOST: mysql:3306
+      EBEAN_DATASOURCE_PASSWORD: datahub
+      EBEAN_DATASOURCE_URL: jdbc:mysql://mysql:3306/datahub?verifyServerCertificate=false&useSSL=true&useUnicode=yes&characterEncoding=UTF-8&rewriteBatchedStatements=true&enabledTLSProtocols=TLSv1.2
+      EBEAN_DATASOURCE_USERNAME: root
+      ELASTICSEARCH_HOST: search
+      ELASTICSEARCH_IMPLEMENTATION: opensearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_PROTOCOL: http
+      ELASTICSEARCH_USE_SSL: 'false'
+      GRAPH_SERVICE_IMPL: elasticsearch
+      KAFKA_BOOTSTRAP_SERVER: broker:29092
+      KAFKA_SCHEMAREGISTRY_URL: http://datahub-gms:8080/schema-registry/api/
+      SCHEMA_REGISTRY_TYPE: INTERNAL
+      SCHEMA_REGISTRY_SYSTEM_UPDATE: 'true'
+      USE_CONFLUENT_SCHEMA_REGISTRY: 'false'
+      CREATE_USER: 'false'
+      PARTITIONS: '3'
+      SPRING_KAFKA_PROPERTIES_AUTO_REGISTER_SCHEMAS: 'true'
+      SPRING_KAFKA_PROPERTIES_USE_LATEST_VERSION: 'true'
+      JAVA_OPTS: -Xms512m -Xmx1g
+
+  datahub-gms:
+    image: cve-free/datahub-gms:v1.7.0.1-cvefree
+    hostname: datahub-gms
+    container_name: dh-gms
+    depends_on:
+      system-update: {condition: service_completed_successfully}
+    environment:
+      DATAHUB_SERVER_TYPE: quickstart
+      ENTITY_REGISTRY_CONFIG_PATH: /datahub/datahub-gms/resources/entity-registry.yml
+      DATAHUB_TELEMETRY_ENABLED: 'false'
+      DATAHUB_BASE_PATH: /
+      DATAHUB_GMS_BASE_PATH: /
+      DATAHUB_SYSTEM_CLIENT_SECRET: JohnSnowKnowsNothing
+      DATAHUB_TOKEN_SERVICE_SIGNING_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      DATAHUB_TOKEN_SERVICE_SALT: 0123456789abcdef0123456789abcdef
+      EBEAN_DATASOURCE_DRIVER: com.mysql.jdbc.Driver
+      EBEAN_DATASOURCE_HOST: mysql:3306
+      EBEAN_DATASOURCE_PASSWORD: datahub
+      EBEAN_DATASOURCE_URL: jdbc:mysql://mysql:3306/datahub?verifyServerCertificate=false&useSSL=true&useUnicode=yes&characterEncoding=UTF-8&rewriteBatchedStatements=true&enabledTLSProtocols=TLSv1.2
+      EBEAN_DATASOURCE_USERNAME: root
+      ELASTICSEARCH_HOST: search
+      ELASTICSEARCH_IMPLEMENTATION: opensearch
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_PROTOCOL: http
+      ELASTICSEARCH_USE_SSL: 'false'
+      GRAPH_SERVICE_IMPL: elasticsearch
+      KAFKA_BOOTSTRAP_SERVER: broker:29092
+      KAFKA_SCHEMAREGISTRY_URL: http://datahub-gms:8080/schema-registry/api/
+      SCHEMA_REGISTRY_TYPE: INTERNAL
+      MAE_CONSUMER_ENABLED: 'true'
+      MCE_CONSUMER_ENABLED: 'true'
+      MCL_CONSUMER_BATCH_ENABLED: 'true'
+      MCP_CONSUMER_BATCH_ENABLED: 'true'
+      ENTITY_SERVICE_ENABLE_RETENTION: 'true'
+      ENTITY_VERSIONING_ENABLED: 'true'
+      DEV_TOOLING_ENABLED: 'false'
+      JAVA_OPTS: -Xms512m -Xmx1g -Dhazelcast.wait.seconds.before.join=0
+    ports:
+      - "8080:8080"
+      - "4319:4319"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sS --fail http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
+
+  datahub-frontend-react:
+    image: cve-free/datahub-frontend-react:v1.7.0.1-cvefree
+    hostname: datahub-frontend-react
+    container_name: dh-frontend
+    depends_on:
+      datahub-gms: {condition: service_healthy}
+    environment:
+      DATAHUB_APP_VERSION: 1.7.0.1
+      DATAHUB_BASE_PATH: /
+      DATAHUB_GMS_HOST: datahub-gms
+      DATAHUB_GMS_PORT: '8080'
+      DATAHUB_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      DATAHUB_SYSTEM_CLIENT_SECRET: JohnSnowKnowsNothing
+      DATAHUB_TOKEN_SERVICE_SIGNING_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      DATAHUB_TOKEN_SERVICE_SALT: 0123456789abcdef0123456789abcdef
+      KAFKA_BOOTSTRAP_SERVER: broker:29092
+      JAVA_OPTS: -Xms512m -Xmx512m -Dhttp.port=9002 -Dconfig.file=datahub-frontend/conf/application.conf -Djava.security.auth.login.config=datahub-frontend/conf/jaas.conf -Dlogback.configurationFile=datahub-frontend/conf/logback.xml -Dlogback.debug=false -Dpidfile.path=/dev/null
+    ports:
+      - "9002:9002"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sS --fail http://localhost:9002/ || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+
+  datahub-actions:
+    image: cve-free/datahub-actions:v1.7.0.1-cvefree
+    hostname: actions
+    container_name: dh-actions
+    depends_on:
+      datahub-gms: {condition: service_healthy}
+    environment:
+      DATAHUB_GMS_PROTOCOL: http
+      DATAHUB_GMS_HOST: datahub-gms
+      DATAHUB_GMS_PORT: '8080'
+      DATAHUB_SYSTEM_CLIENT_ID: __datahub_system
+      DATAHUB_SYSTEM_CLIENT_SECRET: JohnSnowKnowsNothing
+      DATAHUB_TOKEN_SERVICE_SIGNING_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      DATAHUB_TOKEN_SERVICE_SALT: 0123456789abcdef0123456789abcdef
+      KAFKA_BOOTSTRAP_SERVER: broker:29092
+      SCHEMA_REGISTRY_URL: http://datahub-gms:8080/schema-registry/api/
+      ELASTICSEARCH_HOST: search
+      ELASTICSEARCH_PORT: '9200'
+      ELASTICSEARCH_PROTOCOL: http
+      ELASTICSEARCH_USE_SSL: 'false'
+
+volumes:
+  broker:
+  mysqldata:
+  osdata:
