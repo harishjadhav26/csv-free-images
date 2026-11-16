@@ -1,22 +1,19 @@
 # syntax=docker/dockerfile:1
 # Confluent Platform Schema Registry (7.6.0) - CVE-free, public Chainguard images only
-# Builder: wolfi-base (download binary) | Runtime: jre:latest (Java 27)
+# Builder: wolfi-base (download binary) | Runtime: jdk (Java 27 + bash)
 ARG BASE_IMAGE=cgr.dev/chainguard/wolfi-base:latest
-ARG RUNTIME_IMAGE=cgr.dev/chainguard/jre:latest
+ARG RUNTIME_IMAGE=cgr.dev/chainguard/jdk:latest
 ARG CP_VERSION=7.6.0
-ARG SCHEMA_REGISTRY_BASE_URL=https://packages.confluent.io/archive/${CP_VERSION}
 
 FROM ${BASE_IMAGE} AS builder
-RUN apk add --no-cache curl tar
-
-ARG SCHEMA_REGISTRY_URL=${SCHEMA_REGISTRY_BASE_URL}/confluent-schema-registry-${CP_VERSION}.tar.gz
-RUN mkdir -p /etc/confluent && \
-    curl -fSL -o /tmp/schema-registry.tar.gz ${SCHEMA_REGISTRY_URL} && \
-    tar -xzf /tmp/schema-registry.tar.gz -C /etc/confluent --strip-components=1 && \
-    rm -f /tmp/schema-registry.tar.gz
+ARG CP_VERSION=7.6.0
+RUN apk add --no-cache curl && \
+    mkdir -p /etc/confluent && \
+    curl -fSL -o /tmp/confluent.tar.gz "https://packages.confluent.io/archive/${CP_VERSION%.*}/confluent-${CP_VERSION}.tar.gz" && \
+    tar -xzf /tmp/confluent.tar.gz -C /etc/confluent --strip-components=1 && \
+    rm -f /tmp/confluent.tar.gz
 
 FROM ${RUNTIME_IMAGE}
-
 ARG CP_VERSION=7.6.0
 
 ENV CP_VERSION=${CP_VERSION}
@@ -36,9 +33,7 @@ WORKDIR /etc/confluent
 
 COPY --from=builder /etc/confluent /etc/confluent
 
-RUN mkdir -p /etc/schema-registry /var/lib/schema-registry
-
 EXPOSE 8081
 
 ENTRYPOINT ["schema-registry-start"]
-CMD ["/etc/schema-registry/schema-registry.properties"]
+CMD ["/etc/confluent/etc/schema-registry/schema-registry.properties"]
